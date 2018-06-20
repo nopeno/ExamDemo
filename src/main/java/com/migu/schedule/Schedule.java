@@ -290,11 +290,6 @@ public class Schedule {
 			if (last.total - first.total > threshold && pending.isEmpty()) {
 				return ReturnCodeKeys.E014;
 			}
-			//for (NodeTasks target : targets) {
-			//	for (Integer taskId : target.getTasks().keySet()) {
-			//		tasks.get(taskId).setNodeId(target.getNodeId());
-			//	}
-			//}
 			pending.clear();
 			return ReturnCodeKeys.E013;
 		} else if (nodes.isEmpty()) {
