@@ -52,11 +52,16 @@ public class Schedule {
 		public void setConsumption(int consumption) {
 			this.consumption = consumption;
 		}
+
+		@Override
+		public String toString() {
+			return "TaskItem [" + taskId + ", " + consumption + ", " + nodeId + "]";
+		}
 	}
 
 	static class NodeTasks {
 		final int nodeId;
-		final Map<Integer, Integer> tasks = new TreeMap<>();
+		final List<Integer> consumptions = new LinkedList<>();
 		int total = 0;
 
 		NodeTasks(int nodeId) {
@@ -65,7 +70,8 @@ public class Schedule {
 		}
 
 		void addTask(TaskItem task) {
-			tasks.put(task.taskId, task.consumption);
+			consumptions.add(task.consumption);
+			//tasks.put(task.taskId, task.consumption);
 			total += task.consumption;
 		}
 
@@ -81,8 +87,13 @@ public class Schedule {
 			return nodeId;
 		}
 
-		public Map<Integer, Integer> getTasks() {
-			return tasks;
+		public List<Integer> getConsumptions() {
+			return consumptions;
+		}
+		
+		@Override
+		public String toString() {
+			return "NodeTasks [" + nodeId + ", " + total + "]";
 		}
 
 	}
@@ -91,6 +102,17 @@ public class Schedule {
 	private final Map<Integer, TaskItem> tasks = new TreeMap<>();
 	private final Set<Integer> pending = new HashSet<>();
 
+	private TaskItem assignTask(int consumption, int nodeId) {
+		for(Map.Entry<Integer, TaskItem> entry: tasks.entrySet()) {
+			TaskItem item = entry.getValue();
+			if(-1 == item.getNodeId() && item.getConsumption() == consumption) {
+				item.setNodeId(nodeId);
+				return item;
+			}
+		}
+		return null;
+	}
+	
 	/**
 	 * 功能说明: <br>
 	 * 系统初始化，会清空所有数据，包括已经注册到系统的服务节点信息、以及添加的任务信息，全部都被清理。<br>
@@ -225,9 +247,10 @@ public class Schedule {
 			if (tasks.isEmpty()) {
 				return ReturnCodeKeys.E013;
 			}
-			if(1 == nodes.size()) {
+			if (1 == nodes.size()) {
 				int nodeId = nodes.iterator().next();
-				for(TaskItem task: tasks.values()) task.setNodeId(nodeId);
+				for (TaskItem task : tasks.values())
+					task.setNodeId(nodeId);
 				pending.clear();
 				return ReturnCodeKeys.E013;
 			}
@@ -238,7 +261,7 @@ public class Schedule {
 				return (0 != ret) ? ret : Integer.compare(l.taskId, r.taskId);
 			});
 			LinkedList<NodeTasks> targets = new LinkedList<>();
-			for (Integer nodeId: nodes) {
+			for (Integer nodeId : nodes) {
 				targets.add(new NodeTasks(nodeId.intValue()));
 			}
 			for (TaskItem task : sortedTasks) {
@@ -251,18 +274,28 @@ public class Schedule {
 			}
 			Collections.sort(targets, (l, r) -> {
 				int ret = Integer.compare(l.total, r.total);
-				return (0 != ret) ? ret : Integer.compare(l.tasks.size(), r.tasks.size());
+				return (0 != ret) ? ret : Integer.compare(l.getConsumptions().size(), r.getConsumptions().size());
 			});
+			tasks.forEach((k,v) -> v.setNodeId(-1));
+			for(NodeTasks target: targets) {
+				List<Integer> consumptions = target.getConsumptions();
+				if(null != consumptions && !consumptions.isEmpty()) {
+					for(Integer consumption: consumptions) {
+						this.assignTask(consumption.intValue(), target.getNodeId());
+					}
+				}
+			}
 			NodeTasks first = targets.getFirst();
 			NodeTasks last = targets.getLast();
 			if (last.total - first.total > threshold && pending.isEmpty()) {
 				return ReturnCodeKeys.E014;
 			}
-			for(NodeTasks target: targets) {
-				for(Integer taskId: target.getTasks().keySet()) {
-					tasks.get(taskId).setNodeId(target.getNodeId());
-				}
-			}
+			//for (NodeTasks target : targets) {
+			//	for (Integer taskId : target.getTasks().keySet()) {
+			//		tasks.get(taskId).setNodeId(target.getNodeId());
+			//	}
+			//}
+			pending.clear();
 			return ReturnCodeKeys.E013;
 		} else if (nodes.isEmpty()) {
 			return ReturnCodeKeys.E014;
