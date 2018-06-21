@@ -6,6 +6,7 @@ import com.migu.schedule.info.TaskInfo;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
+import java.util.Iterator;
 import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
@@ -60,12 +61,12 @@ public class Schedule {
 	}
 
 	static class NodeTasks {
-		final int nodeId;
+		int nodeId;
 		final List<Integer> consumptions = new LinkedList<>();
 		int total = 0;
 
-		NodeTasks(int nodeId) {
-			this.nodeId = nodeId;
+		NodeTasks() {
+			this.nodeId = -1;
 			this.total = 0;
 		}
 
@@ -83,6 +84,9 @@ public class Schedule {
 			this.total = total;
 		}
 
+		public void setNodeId(int nodeId) {
+			this.nodeId = nodeId;
+		}
 		public int getNodeId() {
 			return nodeId;
 		}
@@ -255,14 +259,14 @@ public class Schedule {
 				return ReturnCodeKeys.E013;
 			}
 
-			List<TaskItem> sortedTasks = new LinkedList<>(tasks.values());
+			LinkedList<TaskItem> sortedTasks = new LinkedList<>(tasks.values());
 			Collections.sort(sortedTasks, (l, r) -> {
 				int ret = Integer.compare(r.consumption, l.consumption);
-				return (0 != ret) ? ret : Integer.compare(l.taskId, r.taskId);
+				return (0 != ret) ? ret : Integer.compare(r.taskId, l.taskId);
 			});
 			LinkedList<NodeTasks> targets = new LinkedList<>();
 			for (Integer nodeId : nodes) {
-				targets.add(new NodeTasks(nodeId.intValue()));
+				targets.add(new NodeTasks());
 			}
 			for (TaskItem task : sortedTasks) {
 				NodeTasks min = targets.getFirst();
@@ -272,19 +276,43 @@ public class Schedule {
 				}
 				min.addTask(task);
 			}
+			Collections.sort(targets, (l, r) -> Integer.compare(l.total, r.total));
+			Iterator<Integer> iter = nodes.iterator();
+			for(NodeTasks target: targets) {
+				target.setNodeId(iter.next());
+			}
 			Collections.sort(targets, (l, r) -> {
 				int ret = Integer.compare(l.total, r.total);
 				return (0 != ret) ? ret : Integer.compare(l.getConsumptions().size(), r.getConsumptions().size());
 			});
-			tasks.forEach((k,v) -> v.setNodeId(-1));
+			Map<Integer, LinkedList<Integer>> temp = new TreeMap<>();
 			for(NodeTasks target: targets) {
 				List<Integer> consumptions = target.getConsumptions();
 				if(null != consumptions && !consumptions.isEmpty()) {
 					for(Integer consumption: consumptions) {
-						this.assignTask(consumption.intValue(), target.getNodeId());
+						LinkedList<Integer> ns = temp.get(consumption);
+						if(null == ns) {
+							ns = new LinkedList<>();
+							ns.add(target.getNodeId());
+							temp.put(consumption, ns);
+						}else {
+							ns.add(target.getNodeId());
+						}
 					}
 				}
 			}
+			tasks.forEach((k,v) -> v.setNodeId(-1));
+			for(TaskItem item = sortedTasks.pollLast(); null != item; item = sortedTasks.pollLast()) {
+				tasks.get(item.getTaskId()).setNodeId(temp.get(item.getConsumption()).poll());
+			}
+//			for(NodeTasks target: targets) {
+//				List<Integer> consumptions = target.getConsumptions();
+//				if(null != consumptions && !consumptions.isEmpty()) {
+//					for(Integer consumption: consumptions) {
+//						this.assignTask(consumption.intValue(), target.getNodeId());
+//					}
+//				}
+//			}
 			NodeTasks first = targets.getFirst();
 			NodeTasks last = targets.getLast();
 			if (last.total - first.total > threshold && pending.isEmpty()) {
